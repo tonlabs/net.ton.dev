@@ -20,23 +20,29 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 
 if [ "${INSTALL_DEPENDENCIES}" = "yes" ]; then
     echo "INFO: install dependencies..."
-    sudo apt update && sudo apt -y install \
-        build-essential \
-        cargo \
+    sudo dnf groupinstall -y "Development Tools" # installing Development Tools for CentOS 8 (analogue of `sudo apt -y install build-essential` in Ubuntu 18.04)
+    sudo dnf install -y epel-release # installing Extra Packages for Enterprise Linux (EPEL) repository
+    sudo sed -i "s/enabled=0/enabled=1/" /etc/yum.repos.d/CentOS-PowerTools.repo # enabling CentOS PowerTools repository
+    sudo dnf makecache # updating repository cache
+    sudo dnf install -y \
+        git \
         ccache \
         cmake \
         gawk \
-        gcc \
         gperf \
-        g++ \
-        libgflags-dev \
-        libmicrohttpd-dev \
-        libreadline-dev \
-        libssl-dev \
-        libz-dev \
+        gflags \
+        libmicrohttpd-devel \
+        readline-devel \
+        openssl-devel \
         ninja-build \
         pkg-config \
-        zlib1g-dev
+        zlib-devel
+    sudo dnf autoremove -y rust # removing not up-to-date Rust-related packages which were previously installed from CentOS standard repositories
+    curl https://sh.rustup.rs -sSf | sh -s -- -y # installing Rust and Cargo directly
+    if ! grep 'export PATH="$HOME/.cargo/bin:$PATH"' $HOME/.bashrc; then
+        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $HOME/.bashrc # adding newly created directories for Rust and Cargo to $PATH
+    fi
+    source $HOME/.bashrc
     echo "INFO: install dependencies... DONE"
 fi
 
@@ -51,16 +57,13 @@ echo "INFO: clone ${TON_GITHUB_REPO} (${TON_STABLE_GITHUB_COMMIT_ID})... DONE"
 cd "${TON_SRC_DIR}"
 git apply "${NET_TON_DEV_SRC_TOP_DIR}/patches/0001-Fix-for-neighbours-unreliability.patch"
 
-# Get AVX support
-[ $(grep -cim1 avx /proc/cpuinfo) -eq 1 ] && TON_ARCH="-DTON_ARCH=corei7-avx"
-
 echo "INFO: build a node..."
 mkdir -p "${TON_BUILD_DIR}"
 cd "${TON_BUILD_DIR}"
 #cmake -DCMAKE_BUILD_TYPE=Release ..
 #cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 #cmake --build .
-cmake .. -G "Ninja" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPORTABLE=ON $TON_ARCH
+cmake .. -G "Ninja" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPORTABLE=ON -DTON_ARCH=corei7-avx
 ninja
 echo "INFO: build a node... DONE"
 
